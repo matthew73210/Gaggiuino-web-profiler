@@ -36,13 +36,19 @@
         .json-display .phase.highlight {
             background-color: #f0f8ff; /* Light blue highlight */
         }
+        .json-display .metadata {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f0f0f0; /* Light grey background */
+        }
         .chart-display {
             width: 66.67%;
             padding: 20px;
             box-sizing: border-box;
         }
-        #fileInput {
-            margin: 20px;
+        #fileInput, #exportButton, #loadExampleButton, #addPhaseButton, #removePhaseButton, #debugMetadataButton {
+            margin: 10px;
         }
         #myChart {
             width: 100%;
@@ -53,6 +59,11 @@
 <body>
 
     <input type="file" id="fileInput" accept=".json">
+    <button id="exportButton">Export JSON</button>
+    <button id="loadExampleButton">Load Example</button>
+    <button id="addPhaseButton">Add Phase</button>
+    <button id="removePhaseButton">Remove Phase</button>
+    <button id="debugMetadataButton">Debug Metadata</button>
     <div class="container">
         <div class="json-display" id="jsonDisplay"></div>
         <div class="chart-display">
@@ -96,10 +107,10 @@
 
         let chart; // Variable to hold the chart instance
         let phasesData = []; // Store phases data for highlighting
-        let originalData = {}; // Store the original JSON data
+        let globalData = {}; // Store the global JSON data
 
         function plotProfile(data) {
-            originalData = data;
+            globalData = data;
             const { phases, waterTemperature: globalWaterTemperature } = data;
 
             const globalTemperature = globalWaterTemperature || 20; // Default to 20°C if not present
@@ -363,6 +374,65 @@
             }
         }
 
+        // Function to update the JSON display and global data
+        function updateJsonDisplay(data) {
+            const jsonDisplay = document.getElementById('jsonDisplay');
+            jsonDisplay.innerHTML = ''; // Clear previous content
+
+            // Add id and name at the start
+            const initialMetadataSections = ['id', 'name'];
+            initialMetadataSections.forEach(section => {
+                const metadataDiv = document.createElement('div');
+                metadataDiv.className = 'metadata';
+                metadataDiv.innerHTML = `<pre contenteditable="true" class="metadata-${section}">${JSON.stringify({ [section]: data[section] }, null, 2)}</pre>`;
+                jsonDisplay.appendChild(metadataDiv);
+            });
+
+            // Add phases
+            const phasesDiv = document.createElement('div');
+            phasesDiv.className = 'phases';
+            data.phases.forEach((phase, index) => {
+                const phaseDiv = document.createElement('div');
+                phaseDiv.className = 'phase';
+                phaseDiv.innerHTML = `<pre contenteditable="true">${JSON.stringify(phase, null, 2)}</pre>`;
+                phasesDiv.appendChild(phaseDiv);
+            });
+            jsonDisplay.appendChild(phasesDiv);
+
+            // Add remaining metadata sections at the end
+            const remainingMetadataSections = ['globalStopConditions', 'waterTemperature', 'recipe'];
+            remainingMetadataSections.forEach(section => {
+                const metadataDiv = document.createElement('div');
+                metadataDiv.className = 'metadata';
+                metadataDiv.innerHTML = `<pre contenteditable="true" class="metadata-${section}">${JSON.stringify({ [section]: data[section] }, null, 2)}</pre>`;
+                jsonDisplay.appendChild(metadataDiv);
+            });
+
+            // Add event listener to update the graph and global data when JSON is modified
+            jsonDisplay.addEventListener('input', function(event) {
+                if (event.target.tagName === 'PRE') {
+                    try {
+                        const metadataSections = ['id', 'name', 'globalStopConditions', 'waterTemperature', 'recipe'];
+                        const metadata = {};
+                        metadataSections.forEach(section => {
+                            const metadataDiv = jsonDisplay.querySelector(`.metadata-${section}`);
+                            if (metadataDiv) {
+                                const parsedData = JSON.parse(metadataDiv.innerText);
+                                metadata[section] = parsedData[section];
+                            }
+                        });
+
+                        const updatedPhases = Array.from(jsonDisplay.getElementsByClassName('phase')).map(phaseDiv => JSON.parse(phaseDiv.innerText));
+                        const updatedData = { ...metadata, phases: updatedPhases };
+                        globalData = updatedData;
+                        plotProfile(updatedData);
+                    } catch (error) {
+                        console.error('Invalid JSON format:', error);
+                    }
+                }
+            });
+        }
+
         // Event listener for file input to load and process the JSON data
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
@@ -371,32 +441,144 @@
             reader.onload = function(e) {
                 const data = JSON.parse(e.target.result);
                 plotProfile(data);
-
-                const jsonDisplay = document.getElementById('jsonDisplay');
-                jsonDisplay.innerHTML = ''; // Clear previous content
-
-                data.phases.forEach((phase, index) => {
-                    const phaseDiv = document.createElement('div');
-                    phaseDiv.className = 'phase';
-                    phaseDiv.innerHTML = `<pre contenteditable="true">${JSON.stringify(phase, null, 2)}</pre>`;
-                    jsonDisplay.appendChild(phaseDiv);
-                });
-
-                // Add event listener to update the graph when JSON is modified
-                jsonDisplay.addEventListener('input', function(event) {
-                    if (event.target.tagName === 'PRE') {
-                        try {
-                            const updatedPhases = Array.from(jsonDisplay.getElementsByClassName('phase')).map(phaseDiv => JSON.parse(phaseDiv.innerText));
-                            const updatedData = { ...originalData, phases: updatedPhases };
-                            plotProfile(updatedData);
-                        } catch (error) {
-                            console.error('Invalid JSON format:', error);
-                        }
-                    }
-                });
+                updateJsonDisplay(data);
             };
 
             reader.readAsText(file);
+        });
+
+        // Event listener for export button
+        document.getElementById('exportButton').addEventListener('click', function() {
+            const jsonData = {
+                id: globalData.id,
+                name: globalData.name,
+                phases: globalData.phases,
+                globalStopConditions: globalData.globalStopConditions,
+                waterTemperature: globalData.waterTemperature,
+                recipe: globalData.recipe
+            };
+
+            // Create a blob and download link
+            const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${globalData.name}.json`; // Use the name field for the filename
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // Event listener for load example button
+        document.getElementById('loadExampleButton').addEventListener('click', function() {
+            const exampleData = {
+                "id": 1,
+                "name": "Example Profile",
+                "phases": [
+                    {
+                        "name": "",
+                        "type": "FLOW",
+                        "target": {
+                            "start": 4,
+                            "end": 4,
+                            "curve": "INSTANT",
+                            "time": 0
+                        },
+                        "restriction": 2,
+                        "stopConditions": {
+                            "time": 10000,
+                            "pressureAbove": 2,
+                            "pressureBelow": 0,
+                            "flowAbove": 0,
+                            "flowBelow": 0,
+                            "weight": 1,
+                            "waterPumpedInPhase": 60
+                        },
+                        "skip": false,
+                        "waterTemperature": 0
+                    },
+                    {
+                        "name": "",
+                        "type": "PRESSURE",
+                        "target": {
+                            "start": 2,
+                            "end": 8,
+                            "curve": "EASE_IN_OUT",
+                            "time": 4000
+                        },
+                        "restriction": 3.5,
+                        "stopConditions": {
+                            "time": 5000,
+                            "pressureAbove": 0,
+                            "pressureBelow": 0,
+                            "flowAbove": 0,
+                            "flowBelow": 0,
+                            "weight": 0,
+                            "waterPumpedInPhase": 0
+                        },
+                        "skip": false,
+                        "waterTemperature": 0
+                    }
+                ],
+                "globalStopConditions": {
+                    "time": 0,
+                    "weight": 38,
+                    "waterPumped": 0
+                },
+                "waterTemperature": 91,
+                "recipe": {
+                    "coffeeIn": 0,
+                    "coffeeOut": 0,
+                    "ratio": 0
+                }
+            };
+            plotProfile(exampleData);
+            updateJsonDisplay(exampleData);
+        });
+
+        // Event listener for add phase button
+        document.getElementById('addPhaseButton').addEventListener('click', function() {
+            const newPhase = {
+                "name": "",
+                "type": "FLOW",
+                "target": {
+                    "start": 0,
+                    "end": 0,
+                    "curve": "INSTANT",
+                    "time": 0
+                },
+                "restriction": 0,
+                "stopConditions": {
+                    "time": 5000,
+                    "pressureAbove": 0,
+                    "pressureBelow": 0,
+                    "flowAbove": 0,
+                    "flowBelow": 0,
+                    "weight": 0,
+                    "waterPumpedInPhase": 0
+                },
+                "skip": false,
+                "waterTemperature": 0
+            };
+
+            globalData.phases.push(newPhase);
+            updateJsonDisplay(globalData);
+            plotProfile(globalData);
+        });
+
+        // Event listener for remove phase button
+        document.getElementById('removePhaseButton').addEventListener('click', function() {
+            if (globalData.phases.length > 0) {
+                globalData.phases.pop();
+                updateJsonDisplay(globalData);
+                plotProfile(globalData);
+            }
+        });
+
+        // Event listener for debug metadata button
+        document.getElementById('debugMetadataButton').addEventListener('click', function() {
+            console.log('Current Metadata:', globalData);
         });
     </script>
 </body>
