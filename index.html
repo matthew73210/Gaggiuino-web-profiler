@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow and Pressure Chart</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            height: 100vh;
+        }
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        .json-display {
+            width: 33.33%;
+            padding: 20px;
+            overflow: auto;
+            border-right: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .json-display .phase {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            transition: background-color 0.3s;
+        }
+        .json-display .phase.highlight {
+            background-color: #f0f8ff; /* Light blue highlight */
+        }
+        .chart-display {
+            width: 66.67%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #fileInput {
+            margin: 20px;
+        }
+        #myChart {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="fileInput" accept=".json">
+    <div class="container">
+        <div class="json-display" id="jsonDisplay"></div>
+        <div class="chart-display">
+            <canvas id="myChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Function to generate transition data for curves (linear, ease in/out, ease in, ease out, instant)
+        function applyTransition(transitionType, startValue, endValue, startTime, endTime) {
+            const data = [];
+            const stepCount = Math.floor((endTime - startTime) / 0.1); // 0.1s intervals
+            for (let i = 0; i <= stepCount; i++) {
+                const time = startTime + i * 0.1;
+                let value;
+                const progress = i / stepCount;
+
+                switch(transitionType) {
+                    case 'EASE_IN_OUT':
+                        value = startValue + (endValue - startValue) * (0.5 - Math.cos(Math.PI * progress) / 2);
+                        break;
+                    case 'EASE_IN':
+                        value = startValue + (endValue - startValue) * (progress * progress);
+                        break;
+                    case 'EASE_OUT':
+                        value = startValue + (endValue - startValue) * (1 - (1 - progress) * (1 - progress));
+                        break;
+                    case 'INSTANT':
+                        value = (i === 0) ? startValue : endValue;
+                        break;
+                    case 'LINEAR':
+                    default:
+                        value = startValue + (endValue - startValue) * progress;
+                        break;
+                }
+
+                data.push({ x: time, y: value });
+            }
+            return data;
+        }
+
+        let chart; // Variable to hold the chart instance
+        let phasesData = []; // Store phases data for highlighting
+        let originalData = {}; // Store the original JSON data
+
+        function plotProfile(data) {
+            originalData = data;
+            const { phases, waterTemperature: globalWaterTemperature } = data;
+
+            const globalTemperature = globalWaterTemperature || 20; // Default to 20°C if not present
+            console.log(`Global Temperature: ${globalTemperature}°C`);
+
+            const pressureData = []; // For pressure profile
+            const flowData = []; // For flow profile
+            const temperatureData = []; // Override if phase has temp
+            const globalTemperatureData = [];
+            const timeLabels = [];
+            const phaseMarkers = [];
+            const flowRestrictionData = [];  // For flow restrictions
+            const pressureRestrictionData = [];  // For pressure restrictions
+
+            let currentTime = 0;
+
+            phases.forEach((phase, index) => {
+                const { type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
+
+                const phaseTime = stopConditions.time / 1000; // Convert ms to seconds
+                const startTime = currentTime;
+                const endTime = currentTime + phaseTime;
+
+                // Update the time labels
+                timeLabels.push(startTime, endTime);
+
+                // Apply transitions to Pressure or Flow data based on the type
+                let transitionData = [];
+
+                if (type === 'PRESSURE') {
+                    // Handle pressure transition and apply any necessary restriction data
+                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, endTime);
+                    pressureData.push(...transitionData);
+
+                    if (restriction !== null) {
+                        flowRestrictionData.push({ x: startTime, y: restriction, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: restriction, phase: 'FLOW' });
+                        pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                    } else {
+                        flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                        pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                    }
+                } else if (type === 'FLOW') {
+                    // Handle flow transition and apply any necessary restriction data
+                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, endTime);
+                    flowData.push(...transitionData);
+
+                    if (restriction !== null) {
+                        pressureRestrictionData.push({ x: startTime, y: restriction, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: restriction, phase: 'PRESSURE' });
+                        flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                    } else {
+                        pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                        flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                    }
+                }
+
+                globalTemperatureData.push(
+                    { x: startTime, y: globalTemperature },
+                    { x: endTime, y: globalTemperature }
+                );
+
+                if (waterTemperature !== 0) {
+                    temperatureData.push(
+                        { x: startTime, y: waterTemperature },
+                        { x: endTime, y: waterTemperature }
+                    );
+                }
+
+                phaseMarkers.push(startTime, endTime);
+
+                // Add null values to create a gap between phases
+                if (index < phases.length - 1) {
+                    const nextPhase = phases[index + 1];
+                    const nextStartTime = currentTime + phaseTime;
+                    if (nextPhase.type === 'PRESSURE') {
+                        flowData.push({ x: nextStartTime, y: null });
+                    } else if (nextPhase.type === 'FLOW') {
+                        pressureData.push({ x: nextStartTime, y: null });
+                    }
+                }
+
+                // Store phase data for highlighting
+                phasesData.push({
+                    startTime,
+                    endTime,
+                    index
+                });
+
+                currentTime += phaseTime;
+            });
+
+            const uniqueTimeLabels = [...new Set(timeLabels)].sort((a, b) => a - b);
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(document.getElementById('myChart'), {
+                type: 'line',
+                data: {
+                    labels: uniqueTimeLabels,
+                    datasets: [
+                        {
+                            label: 'Pressure',
+                            data: pressureData,
+                            borderColor: 'blue',
+                            backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                        },
+                        {
+                            label: 'Flow',
+                            data: flowData,
+                            borderColor: 'orange',
+                            backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                        },
+                        {
+                            label: 'Global Temperature',
+                            data: globalTemperatureData,
+                            borderColor: 'red',
+                            backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            fill: false,
+                            yAxisID: 'y2',
+                        },
+                        {
+                            label: 'Phase Temperature',
+                            data: temperatureData,
+                            borderColor: 'red',
+                            backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 5,
+                            fill: false,
+                            yAxisID: 'y2',
+                        },
+                        {
+                            label: 'Flow Restriction',
+                            data: flowRestrictionData.map(item => ({
+                                x: item.x,
+                                y: item.y
+                            })),
+                            borderColor: 'orange',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            showLine: true,
+                            yAxisID: 'y1',
+                        },
+                        {
+                            label: 'Pressure Restriction',
+                            data: pressureRestrictionData.map(item => ({
+                                x: item.x,
+                                y: item.y
+                            })),
+                            borderColor: 'blue',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            showLine: true,
+                            yAxisID: 'y1',
+                        }
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Time (s)',
+                            },
+                        },
+                        y1: {
+                            position: 'left',
+                            min: 0,
+                            max: 12,
+                            ticks: {
+                                stepSize: 1,
+                            },
+                        },
+                        y2: {
+                            position: 'right',
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                stepSize: 10,
+                            },
+                        },
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'nearest',
+                            intersect: false,
+                        },
+                        annotation: {
+                            annotations: [
+                                ...phaseMarkers.map(time => ({
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: time,
+                                    borderColor: 'gray',
+                                    borderWidth: 1,
+                                    label: {
+                                        content: `Phase`,
+                                        position: 'top',
+                                    },
+                                }))
+                            ],
+                        },
+                    },
+                    onHover: (event, chartElement) => {
+                        if (chartElement.length > 0) {
+                            const x = chartElement[0].element.x;
+                            highlightPhase(x);
+                        } else {
+                            removeHighlight();
+                        }
+                    },
+                }
+            });
+
+            // Add event listeners for hover
+            const jsonDisplay = document.getElementById('jsonDisplay');
+            const chartCanvas = document.getElementById('myChart');
+
+            function highlightPhase(x) {
+                const phases = jsonDisplay.getElementsByClassName('phase');
+                phasesData.forEach((phaseData, index) => {
+                    if (x >= phaseData.startTime && x <= phaseData.endTime) {
+                        phases[index].classList.add('highlight');
+                    } else {
+                        phases[index].classList.remove('highlight');
+                    }
+                });
+            }
+
+            function removeHighlight() {
+                const phases = jsonDisplay.getElementsByClassName('phase');
+                for (let i = 0; i < phases.length; i++) {
+                    phases[i].classList.remove('highlight');
+                }
+            }
+        }
+
+        // Event listener for file input to load and process the JSON data
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = JSON.parse(e.target.result);
+                plotProfile(data);
+
+                const jsonDisplay = document.getElementById('jsonDisplay');
+                jsonDisplay.innerHTML = ''; // Clear previous content
+
+                data.phases.forEach((phase, index) => {
+                    const phaseDiv = document.createElement('div');
+                    phaseDiv.className = 'phase';
+                    phaseDiv.innerHTML = `<pre contenteditable="true">${JSON.stringify(phase, null, 2)}</pre>`;
+                    jsonDisplay.appendChild(phaseDiv);
+                });
+
+                // Add event listener to update the graph when JSON is modified
+                jsonDisplay.addEventListener('input', function(event) {
+                    if (event.target.tagName === 'PRE') {
+                        try {
+                            const updatedPhases = Array.from(jsonDisplay.getElementsByClassName('phase')).map(phaseDiv => JSON.parse(phaseDiv.innerText));
+                            const updatedData = { ...originalData, phases: updatedPhases };
+                            plotProfile(updatedData);
+                        } catch (error) {
+                            console.error('Invalid JSON format:', error);
+                        }
+                    }
+                });
+            };
+
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
