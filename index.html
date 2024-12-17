@@ -47,8 +47,14 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        #fileInput, #exportButton, #loadExampleButton, #addPhaseButton, #removePhaseButton, #debugMetadataButton {
-            margin: 10px;
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .button-container button {
+            margin: 0 5px;
         }
         #myChart {
             width: 100%;
@@ -58,12 +64,14 @@
 </head>
 <body>
 
-    <input type="file" id="fileInput" accept=".json">
-    <button id="exportButton">Export JSON</button>
-    <button id="loadExampleButton">Load Example</button>
-    <button id="addPhaseButton">Add Phase</button>
-    <button id="removePhaseButton">Remove Phase</button>
-    <button id="debugMetadataButton">Debug Metadata</button>
+    <div class="button-container">
+        <input type="file" id="fileInput" accept=".json">
+        <button id="exportButton">Export JSON</button>
+        <button id="loadExampleButton">Load Example</button>
+        <button id="addPhaseButton">Add Phase</button>
+        <button id="removePhaseButton">Remove Phase</button>
+        <button id="debugMetadataButton">Debug Metadata</button>
+    </div>
     <div class="container">
         <div class="json-display" id="jsonDisplay"></div>
         <div class="chart-display">
@@ -124,11 +132,12 @@
             const phaseMarkers = [];
             const flowRestrictionData = [];  // For flow restrictions
             const pressureRestrictionData = [];  // For pressure restrictions
+            const phaseAnnotations = []; // For phase names
 
             let currentTime = 0;
 
             phases.forEach((phase, index) => {
-                const { type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
+                const { name, type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
 
                 const phaseTime = stopConditions.time / 1000; // Convert ms to seconds
                 const startTime = currentTime;
@@ -153,7 +162,7 @@
                         transitionData = transitionData.filter(point => point.x <= endTime);
                     }
 
-                    pressureData.push(...transitionData);
+                    pressureData.push(...transitionData, { x: endTime, y: null }); // Add null to disconnect phases
 
                     if (restriction !== null) {
                         flowRestrictionData.push({ x: startTime, y: restriction, phase: 'FLOW' });
@@ -178,7 +187,7 @@
                         transitionData = transitionData.filter(point => point.x <= endTime);
                     }
 
-                    flowData.push(...transitionData);
+                    flowData.push(...transitionData, { x: endTime, y: null }); // Add null to disconnect phases
 
                     if (restriction !== null) {
                         pressureRestrictionData.push({ x: startTime, y: restriction, phase: 'PRESSURE' });
@@ -207,16 +216,19 @@
 
                 phaseMarkers.push(startTime, endTime);
 
-                // Add null values to create a gap between phases
-                if (index < phases.length - 1) {
-                    const nextPhase = phases[index + 1];
-                    const nextStartTime = currentTime + phaseTime;
-                    if (nextPhase.type === 'PRESSURE') {
-                        flowData.push({ x: nextStartTime, y: null });
-                    } else if (nextPhase.type === 'FLOW') {
-                        pressureData.push({ x: nextStartTime, y: null });
-                    }
-                }
+                // Add phase name annotations
+                phaseAnnotations.push({
+                    type: 'line',
+                    scaleID: 'x',
+                    value: startTime,
+                    borderColor: 'gray',
+                    borderWidth: 1,
+                    label: {
+                        content: name || `Phase ${index + 1}`,
+                        position: 'start',
+                        enabled: true,
+                    },
+                });
 
                 // Store phase data for highlighting
                 phasesData.push({
@@ -355,7 +367,8 @@
                                         content: `Phase`,
                                         position: 'top',
                                     },
-                                }))
+                                })),
+                                ...phaseAnnotations
                             ],
                         },
                     },
