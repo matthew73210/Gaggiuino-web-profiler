@@ -73,9 +73,9 @@
 
     <script>
         // Function to generate transition data for curves (linear, ease in/out, ease in, ease out, instant)
-        function applyTransition(transitionType, startValue, endValue, startTime, endTime) {
+        function applyTransition(transitionType, startValue, endValue, startTime, endTime, curveDuration) {
             const data = [];
-            const stepCount = Math.floor((endTime - startTime) / 0.1); // 0.1s intervals
+            const stepCount = Math.floor(curveDuration / 0.1); // 0.1s intervals
             for (let i = 0; i <= stepCount; i++) {
                 const time = startTime + i * 0.1;
                 let value;
@@ -133,6 +133,7 @@
                 const phaseTime = stopConditions.time / 1000; // Convert ms to seconds
                 const startTime = currentTime;
                 const endTime = currentTime + phaseTime;
+                const curveDuration = target.time / 1000; // Convert ms to seconds
 
                 // Update the time labels
                 timeLabels.push(startTime, endTime);
@@ -142,7 +143,16 @@
 
                 if (type === 'PRESSURE') {
                     // Handle pressure transition and apply any necessary restriction data
-                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, endTime);
+                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, startTime + curveDuration, curveDuration);
+
+                    // Extend the curve with a straight line if the curve duration is shorter than the phase duration
+                    if (curveDuration < phaseTime) {
+                        transitionData.push({ x: endTime, y: target.end });
+                    } else {
+                        // Intersect the curve at the end of the phase if the curve duration is longer
+                        transitionData = transitionData.filter(point => point.x <= endTime);
+                    }
+
                     pressureData.push(...transitionData);
 
                     if (restriction !== null) {
@@ -158,7 +168,16 @@
                     }
                 } else if (type === 'FLOW') {
                     // Handle flow transition and apply any necessary restriction data
-                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, endTime);
+                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, startTime + curveDuration, curveDuration);
+
+                    // Extend the curve with a straight line if the curve duration is shorter than the phase duration
+                    if (curveDuration < phaseTime) {
+                        transitionData.push({ x: endTime, y: target.end });
+                    } else {
+                        // Intersect the curve at the end of the phase if the curve duration is longer
+                        transitionData = transitionData.filter(point => point.x <= endTime);
+                    }
+
                     flowData.push(...transitionData);
 
                     if (restriction !== null) {
