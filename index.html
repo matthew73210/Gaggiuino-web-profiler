@@ -81,34 +81,38 @@
 
     <script>
         // Function to generate transition data for curves (linear, ease in/out, ease in, ease out, instant)
-        function applyTransition(transitionType, startValue, endValue, startTime, endTime, curveDuration) {
+        function applyTransition(transitionType, startValue, endValue, startTime, endTime, curveDuration, previousEndValue) {
             const data = [];
             const stepCount = Math.floor(curveDuration / 0.1); // 0.1s intervals
-            for (let i = 0; i <= stepCount; i++) {
-                const time = startTime + i * 0.1;
-                let value;
-                const progress = i / stepCount;
 
-                switch(transitionType) {
-                    case 'EASE_IN_OUT':
-                        value = startValue + (endValue - startValue) * (0.5 - Math.cos(Math.PI * progress) / 2);
-                        break;
-                    case 'EASE_IN':
-                        value = startValue + (endValue - startValue) * (progress * progress);
-                        break;
-                    case 'EASE_OUT':
-                        value = startValue + (endValue - startValue) * (1 - (1 - progress) * (1 - progress));
-                        break;
-                    case 'INSTANT':
-                        value = (i === 0) ? startValue : endValue;
-                        break;
-                    case 'LINEAR':
-                    default:
-                        value = startValue + (endValue - startValue) * progress;
-                        break;
+            if (transitionType === 'INSTANT') {
+                // For INSTANT, ignore curve time and set start value as end value
+                data.push({ x: startTime, y: endValue });
+                data.push({ x: endTime, y: endValue });
+            } else {
+                for (let i = 0; i <= stepCount; i++) {
+                    const time = startTime + i * 0.1;
+                    let value;
+                    const progress = i / stepCount;
+
+                    switch(transitionType) {
+                        case 'EASE_IN_OUT':
+                            value = startValue + (endValue - startValue) * (0.5 - Math.cos(Math.PI * progress) / 2);
+                            break;
+                        case 'EASE_IN':
+                            value = startValue + (endValue - startValue) * (progress * progress);
+                            break;
+                        case 'EASE_OUT':
+                            value = startValue + (endValue - startValue) * (1 - (1 - progress) * (1 - progress));
+                            break;
+                        case 'LINEAR':
+                        default:
+                            value = startValue + (endValue - startValue) * progress;
+                            break;
+                    }
+
+                    data.push({ x: time, y: value });
                 }
-
-                data.push({ x: time, y: value });
             }
             return data;
         }
@@ -135,6 +139,8 @@
             const phaseAnnotations = []; // For phase names
 
             let currentTime = 0;
+            let previousFlowEndValue = 0;
+            let previousPressureEndValue = 0;
 
             phases.forEach((phase, index) => {
                 const { name, type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
@@ -152,7 +158,8 @@
 
                 if (type === 'PRESSURE') {
                     // Handle pressure transition and apply any necessary restriction data
-                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, startTime + curveDuration, curveDuration);
+                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousPressureEndValue) : target.start;
+                    transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
                     if (curveDuration < phaseTime) {
@@ -163,6 +170,7 @@
                     }
 
                     pressureData.push(...transitionData, { x: endTime, y: null }); // Add null to disconnect phases
+                    previousPressureEndValue = target.end;
 
                     if (restriction !== null) {
                         flowRestrictionData.push({ x: startTime, y: restriction, phase: 'FLOW' });
@@ -177,7 +185,8 @@
                     }
                 } else if (type === 'FLOW') {
                     // Handle flow transition and apply any necessary restriction data
-                    transitionData = applyTransition(target.curve, target.start, target.end, startTime, startTime + curveDuration, curveDuration);
+                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousFlowEndValue) : target.start;
+                    transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
                     if (curveDuration < phaseTime) {
@@ -188,6 +197,7 @@
                     }
 
                     flowData.push(...transitionData, { x: endTime, y: null }); // Add null to disconnect phases
+                    previousFlowEndValue = target.end;
 
                     if (restriction !== null) {
                         pressureRestrictionData.push({ x: startTime, y: restriction, phase: 'PRESSURE' });
@@ -281,6 +291,7 @@
                             borderWidth: 1,
                             pointRadius: 0,
                             fill: false,
+                            tension: 0.4,
                             yAxisID: 'y2',
                         },
                         {
@@ -291,6 +302,7 @@
                             borderWidth: 2,
                             pointRadius: 5,
                             fill: false,
+                            tension: 0.4,
                             yAxisID: 'y2',
                         },
                         {
