@@ -139,7 +139,7 @@
             phases.forEach((phase, index) => {
                 const { name, type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
 
-                const phaseTime = stopConditions.time / 1000; // Convert ms to seconds
+                const phaseTime = stopConditions.time ? stopConditions.time / 1000 : 10; // Convert ms to seconds or use 10 seconds if not set
                 const startTime = currentTime;
                 const endTime = currentTime + phaseTime;
                 const curveDuration = target.time / 1000; // Convert ms to seconds
@@ -336,7 +336,7 @@
                         y1: {
                             position: 'left',
                             min: 0,
-                            max: 12,
+                            max: 13, // Updated to 13
                             ticks: {
                                 stepSize: 1,
                             },
