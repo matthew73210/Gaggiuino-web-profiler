@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flow and Pressure Chart</title>
+    <title>Gaggiuino Profile Generator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <style>
@@ -49,9 +49,15 @@
         }
         .button-container {
             display: flex;
-            justify-content: space-between;
+            align-items: center;
             width: 100%;
             margin-bottom: 10px;
+        }
+        .button-container a {
+            margin-right: 20px;
+        }
+        .button-container a img {
+            height: 40px; /* Adjust the height as needed */
         }
         .button-container button {
             margin: 0 5px;
@@ -65,12 +71,15 @@
 <body>
 
     <div class="button-container">
+        <a href="https://gaggiuino.github.io/#/" target="_blank">
+            <img src="GAGGIUINO_LOGO_transp.png" alt="Gaggiuino Logo">
+        </a>
         <input type="file" id="fileInput" accept=".json">
         <button id="exportButton">Export JSON</button>
         <button id="loadExampleButton">Load Example</button>
         <button id="addPhaseButton">Add Phase</button>
         <button id="removePhaseButton">Remove Phase</button>
-        <button id="debugMetadataButton">Debug Metadata</button>
+        <!-- <button id="debugMetadataButton">Debug Metadata</button> -->
     </div>
     <div class="container">
         <div class="json-display" id="jsonDisplay"></div>
@@ -141,6 +150,8 @@
             let currentTime = 0;
             let previousFlowEndValue = 0;
             let previousPressureEndValue = 0;
+            let previousPhaseType = null;
+            let previousRestrictionValue = 0;
 
             phases.forEach((phase, index) => {
                 const { name, type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
@@ -158,7 +169,10 @@
 
                 if (type === 'PRESSURE') {
                     // Handle pressure transition and apply any necessary restriction data
-                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousPressureEndValue) : target.start;
+                    let startValue = target.start;
+                    if (target.start === 0 && transitionType !== 'INSTANT') {
+                        startValue = index === 0 ? target.end : (previousPhaseType === 'PRESSURE' ? previousPressureEndValue : previousRestrictionValue);
+                    }
                     transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
@@ -177,15 +191,19 @@
                         flowRestrictionData.push({ x: endTime, y: restriction, phase: 'FLOW' });
                         pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
                         pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                        previousRestrictionValue = restriction;
                     } else {
-                        flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
-                        flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: startTime, y: previousRestrictionValue, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: previousRestrictionValue, phase: 'FLOW' });
                         pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
                         pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
                     }
                 } else if (type === 'FLOW') {
                     // Handle flow transition and apply any necessary restriction data
-                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousFlowEndValue) : target.start;
+                    let startValue = target.start;
+                    if (target.start === 0 && transitionType !== 'INSTANT') {
+                        startValue = index === 0 ? target.end : (previousPhaseType === 'FLOW' ? previousFlowEndValue : previousRestrictionValue);
+                    }
                     transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
@@ -204,9 +222,10 @@
                         pressureRestrictionData.push({ x: endTime, y: restriction, phase: 'PRESSURE' });
                         flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
                         flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                        previousRestrictionValue = restriction;
                     } else {
-                        pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
-                        pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: startTime, y: previousRestrictionValue, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: previousRestrictionValue, phase: 'PRESSURE' });
                         flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
                         flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
                     }
@@ -246,6 +265,9 @@
                     endTime,
                     index
                 });
+
+                // Update previous phase type
+                previousPhaseType = type;
 
                 currentTime += phaseTime;
             });
