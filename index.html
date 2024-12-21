@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaggiuino profile generator</title>
+    <title>Gaggiuino Profile Generator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <style>
@@ -50,6 +50,7 @@
         .button-container {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             width: 100%;
             margin-bottom: 10px;
         }
@@ -61,6 +62,7 @@
         }
         .button-container button {
             margin: 0 5px;
+            flex: 1;
         }
         #myChart {
             width: 100%;
@@ -79,7 +81,7 @@
         <button id="loadExampleButton">Load Example</button>
         <button id="addPhaseButton">Add Phase</button>
         <button id="removePhaseButton">Remove Phase</button>
-        <button id="debugMetadataButton">Debug Metadata</button>
+        <!-- <button id="debugMetadataButton">Debug Metadata</button> -->
     </div>
     <div class="container">
         <div class="json-display" id="jsonDisplay"></div>
