@@ -6,6 +6,8 @@
     <title>Gaggiuino Profile Generator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-toBlob.js/1.0.0/canvas-to-blob.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -76,9 +78,11 @@
         </a>
         <input type="file" id="fileInput" accept=".json">
         <button id="exportButton">Export JSON</button>
+        <button id="exportGraphButton">Export Graph</button>
         <button id="loadExampleButton">Load Example</button>
         <button id="addPhaseButton">Add Phase</button>
         <button id="removePhaseButton">Remove Phase</button>
+        
         <!-- <button id="debugMetadataButton">Debug Metadata</button> -->
     </div>
     <div class="container">
@@ -640,6 +644,23 @@
                 updateJsonDisplay(globalData);
                 plotProfile(globalData);
             }
+        });
+
+        // Event listener for export graph button
+        document.getElementById('exportGraphButton').addEventListener('click', function() {
+            const chartCanvas = document.getElementById('myChart');
+            html2canvas(chartCanvas).then(canvas => {
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${globalData.name}_graph.png`; // Use the name field for the filename
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 'image/png');
+            });
         });
 
         // Event listener for debug metadata button
