@@ -49,9 +49,15 @@
         }
         .button-container {
             display: flex;
-            justify-content: space-between;
+            align-items: center;
             width: 100%;
             margin-bottom: 10px;
+        }
+        .button-container a {
+            margin-right: 20px;
+        }
+        .button-container a img {
+            height: 40px; /* Adjust the height as needed */
         }
         .button-container button {
             margin: 0 5px;
@@ -65,6 +71,9 @@
 <body>
 
     <div class="button-container">
+        <a href="https://gaggiuino.github.io/#/" target="_blank">
+            <img src="GAGGIUINO_LOGO_transp.png" alt="Gaggiuino Logo">
+        </a>
         <input type="file" id="fileInput" accept=".json">
         <button id="exportButton">Export JSON</button>
         <button id="loadExampleButton">Load Example</button>
@@ -430,8 +439,6 @@
                 }
             }
         }
-
-
 
         // Function to update the JSON display and global data
         function updateJsonDisplay(data) {
