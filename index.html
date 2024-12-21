@@ -141,6 +141,8 @@
             let currentTime = 0;
             let previousFlowEndValue = 0;
             let previousPressureEndValue = 0;
+            let previousPhaseType = null;
+            let previousRestrictionValue = 0;
 
             phases.forEach((phase, index) => {
                 const { name, type, target, stopConditions, waterTemperature, restriction, transitionType } = phase;
@@ -158,7 +160,10 @@
 
                 if (type === 'PRESSURE') {
                     // Handle pressure transition and apply any necessary restriction data
-                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousPressureEndValue) : target.start;
+                    let startValue = target.start;
+                    if (target.start === 0 && transitionType !== 'INSTANT') {
+                        startValue = index === 0 ? target.end : (previousPhaseType === 'PRESSURE' ? previousPressureEndValue : previousRestrictionValue);
+                    }
                     transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
@@ -177,15 +182,19 @@
                         flowRestrictionData.push({ x: endTime, y: restriction, phase: 'FLOW' });
                         pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
                         pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                        previousRestrictionValue = restriction;
                     } else {
-                        flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
-                        flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: startTime, y: previousRestrictionValue, phase: 'FLOW' });
+                        flowRestrictionData.push({ x: endTime, y: previousRestrictionValue, phase: 'FLOW' });
                         pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
                         pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
                     }
                 } else if (type === 'FLOW') {
                     // Handle flow transition and apply any necessary restriction data
-                    const startValue = target.start === 0 && transitionType !== 'INSTANT' ? (index === 0 ? target.end : previousFlowEndValue) : target.start;
+                    let startValue = target.start;
+                    if (target.start === 0 && transitionType !== 'INSTANT') {
+                        startValue = index === 0 ? target.end : (previousPhaseType === 'FLOW' ? previousFlowEndValue : previousRestrictionValue);
+                    }
                     transitionData = applyTransition(target.curve, startValue, target.end, startTime, startTime + curveDuration, curveDuration);
 
                     // Extend the curve with a straight line if the curve duration is shorter than the phase duration
@@ -204,9 +213,10 @@
                         pressureRestrictionData.push({ x: endTime, y: restriction, phase: 'PRESSURE' });
                         flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
                         flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
+                        previousRestrictionValue = restriction;
                     } else {
-                        pressureRestrictionData.push({ x: startTime, y: 0, phase: 'PRESSURE' });
-                        pressureRestrictionData.push({ x: endTime, y: 0, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: startTime, y: previousRestrictionValue, phase: 'PRESSURE' });
+                        pressureRestrictionData.push({ x: endTime, y: previousRestrictionValue, phase: 'PRESSURE' });
                         flowRestrictionData.push({ x: startTime, y: 0, phase: 'FLOW' });
                         flowRestrictionData.push({ x: endTime, y: 0, phase: 'FLOW' });
                     }
@@ -246,6 +256,9 @@
                     endTime,
                     index
                 });
+
+                // Update previous phase type
+                previousPhaseType = type;
 
                 currentTime += phaseTime;
             });
@@ -417,6 +430,8 @@
                 }
             }
         }
+
+
 
         // Function to update the JSON display and global data
         function updateJsonDisplay(data) {
