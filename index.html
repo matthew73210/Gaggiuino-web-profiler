@@ -473,22 +473,22 @@
         // New function to plot Yägermeister profile format
         function plotYagermeisterProfile(data) {
             globalData = data;
-            const { profile } = data;
-            
+            const { steps } = data;
+
             const setpointData = [];
             const timeLabels = [];
             const stepMarkers = [];
             const stepAnnotations = [];
-            
+
             let currentTime = 0;
-            
+
             // Process each step in the profile
-            profile.steps.forEach((step, index) => {
+            steps.forEach((step, index) => {
                 const { duration, setpoint, interpolation } = step;
-                
+
                 const startTime = currentTime;
                 const endTime = currentTime + duration;
-                
+
                 // Convert interpolation to curve type
                 let curveType;
                 switch (interpolation) {
@@ -501,26 +501,26 @@
                     default:
                         curveType = 'LINEAR';
                 }
-                
+
                 // Get previous setpoint value if available
-                const prevSetpoint = index > 0 ? profile.steps[index - 1].setpoint : setpoint;
-                
+                const prevSetpoint = index > 0 ? steps[index - 1].setpoint : setpoint;
+
                 // Generate transition data
                 const transitionData = applyTransition(
                     curveType,
-                    prevSetpoint, 
+                    prevSetpoint,
                     setpoint,
                     startTime,
                     endTime,
                     duration
                 );
-                
+
                 setpointData.push(...transitionData);
-                
+
                 // Add time labels and markers
                 timeLabels.push(startTime, endTime);
                 stepMarkers.push(startTime, endTime);
-                
+
                 // Add step annotations
                 stepAnnotations.push({
                     type: 'line',
@@ -534,23 +534,23 @@
                         enabled: true,
                     },
                 });
-                
+
                 // Store step data for highlighting
                 phasesData.push({
                     startTime,
                     endTime,
                     index
                 });
-                
+
                 currentTime += duration;
             });
-            
+
             const uniqueTimeLabels = [...new Set(timeLabels)].sort((a, b) => a - b);
-            
+
             if (chart) {
                 chart.destroy();
             }
-            
+
             chart = new Chart(document.getElementById('myChart'), {
                 type: 'line',
                 data: {
@@ -622,7 +622,7 @@
                     },
                 }
             });
-            
+
             function highlightPhase(x) {
                 const phases = document.getElementById('jsonDisplay').getElementsByClassName('phase');
                 phasesData.forEach((phaseData, index) => {
@@ -633,7 +633,7 @@
                     }
                 });
             }
-            
+
             function removeHighlight() {
                 const phases = document.getElementById('jsonDisplay').getElementsByClassName('phase');
                 for (let i = 0; i < phases.length; i++) {
@@ -641,6 +641,7 @@
                 }
             }
         }
+        
 
         // Function to update the JSON display for standard format
         function updateJsonDisplay(data) {
@@ -705,49 +706,43 @@
         function updateYagermeisterJsonDisplay(data) {
             const jsonDisplay = document.getElementById('jsonDisplay');
             jsonDisplay.innerHTML = ''; // Clear previous content
-            
-            // Add profile section header
-            const profileHeaderDiv = document.createElement('div');
-            profileHeaderDiv.className = 'metadata';
-            profileHeaderDiv.innerHTML = `<pre contenteditable="true" class="metadata-profile-header">{"profile": {</pre>`;
-            jsonDisplay.appendChild(profileHeaderDiv);
-            
+
             // Add steps header
             const stepsHeaderDiv = document.createElement('div');
             stepsHeaderDiv.className = 'metadata';
-            stepsHeaderDiv.innerHTML = `<pre contenteditable="true" class="metadata-steps-header">  "steps": [</pre>`;
+            stepsHeaderDiv.innerHTML = `<pre contenteditable="true" class="metadata-steps-header">"steps": [</pre>`;
             jsonDisplay.appendChild(stepsHeaderDiv);
-            
+
             // Add each step
-            const { profile } = data;
-            profile.steps.forEach((step, index) => {
+            const { steps } = data;
+            steps.forEach((step, index) => {
                 const stepDiv = document.createElement('div');
                 stepDiv.className = 'phase';
-                
+
                 // Format JSON with proper indentation and comma
-                const isLastStep = index === profile.steps.length - 1;
+                const isLastStep = index === steps.length - 1;
                 const stepJson = JSON.stringify(step, null, 2)
                     .replace(/\n/g, '\n    ') // Add extra indentation
                     .replace(/^{/, '    {')   // Indent first line
                     + (isLastStep ? '' : ',');
-                
+
                 stepDiv.innerHTML = `<pre contenteditable="true">${stepJson}</pre>`;
                 jsonDisplay.appendChild(stepDiv);
             });
-            
+
             // Close JSON structure
             const closingDiv = document.createElement('div');
             closingDiv.className = 'metadata';
-            closingDiv.innerHTML = `<pre contenteditable="true" class="metadata-closing">  ]\n}}</pre>`;
+            closingDiv.innerHTML = `<pre contenteditable="true" class="metadata-closing">]</pre>`;
             jsonDisplay.appendChild(closingDiv);
-            
+
             // Add event listener for JSON editing
             jsonDisplay.addEventListener('input', function(event) {
                 if (event.target.tagName === 'PRE') {
                     try {
                         const steps = [];
                         const stepDivs = jsonDisplay.getElementsByClassName('phase');
-                        
+
                         // Parse each step
                         for (let i = 0; i < stepDivs.length; i++) {
                             const stepText = stepDivs[i].querySelector('pre').innerText
@@ -755,14 +750,12 @@
                             const step = JSON.parse(stepText);
                             steps.push(step);
                         }
-                        
+
                         // Update global data
                         globalData = {
-                            profile: {
-                                steps: steps
-                            }
+                            steps: steps
                         };
-                        
+
                         // Update chart
                         plotYagermeisterProfile(globalData);
                     } catch (error) {
@@ -772,6 +765,7 @@
             });
         }
 
+
         // Event listener for file input to load and process the JSON data
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
@@ -779,9 +773,9 @@
 
             reader.onload = function(e) {
                 const data = JSON.parse(e.target.result);
-                
+
                 // Check if the file format is standard or Yägermeister
-                if (isYagermeisterMode && data.profile && data.profile.steps) {
+                if (isYagermeisterMode && data.steps) {
                     // Yägermeister format
                     plotYagermeisterProfile(data);
                     updateYagermeisterJsonDisplay(data);
@@ -794,7 +788,7 @@
                     const yagermeisterData = convertToYagermeisterFormat(data);
                     plotYagermeisterProfile(yagermeisterData);
                     updateYagermeisterJsonDisplay(yagermeisterData);
-                } else if (!isYagermeisterMode && data.profile && data.profile.steps) {
+                } else if (!isYagermeisterMode && data.steps) {
                     // Convert Yägermeister format to standard format
                     const standardData = convertToStandardFormat(data);
                     plotProfile(standardData);
@@ -919,7 +913,7 @@
         // Event listener for export button
         document.getElementById('exportButton').addEventListener('click', function() {
             let jsonData;
-            
+
             if (isYagermeisterMode) {
                 // Export Yägermeister format
                 jsonData = globalData;
@@ -940,49 +934,48 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            
+
             // Set filename based on mode
             if (isYagermeisterMode) {
                 a.download = `yagermeister_profile.json`;
             } else {
                 a.download = `${globalData.name || 'profile'}.json`;
             }
-            
+
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
 
+
         // Event listener for load example button
         document.getElementById('loadExampleButton').addEventListener('click', function() {
             if (isYagermeisterMode) {
                 // Load Yägermeister example
                 const exampleData = {
-                    profile: {
-                        steps: [
-                            {
-                                duration: 10,
-                                setpoint: 40,
-                                interpolation: "linear",
-                            },
-                            {
-                                duration: 30,
-                                setpoint: 80,
-                                interpolation: "ease-out",
-                            },
-                            {
-                                duration: 33,
-                                setpoint: 150,
-                                interpolation: "ease-in",
-                            },
-                            {
-                                duration: 15,
-                                setpoint: 210,
-                                interpolation: "linear",
-                            },
-                        ],
-                    },
+                    steps: [
+                        {
+                            duration: 10,
+                            setpoint: 40,
+                            interpolation: "linear",
+                        },
+                        {
+                            duration: 30,
+                            setpoint: 80,
+                            interpolation: "ease-out",
+                        },
+                        {
+                            duration: 33,
+                            setpoint: 150,
+                            interpolation: "ease-in",
+                        },
+                        {
+                            duration: 15,
+                            setpoint: 210,
+                            interpolation: "linear",
+                        },
+                    ],
                 };
                 plotYagermeisterProfile(exampleData);
                 updateYagermeisterJsonDisplay(exampleData);
@@ -1053,6 +1046,7 @@
                 updateJsonDisplay(exampleData);
             }
         });
+
 
         // Event listener for add phase button
         document.getElementById('addPhaseButton').addEventListener('click', function() {
@@ -1152,64 +1146,60 @@
 
             if (isYagermeisterMode) {
                 console.log('Yägermeister Mode Activated');
-                
-                // Convert current data to Yägermeister format if needed
-                if (globalData.phases) {
-                    const yagermeisterData = convertToYagermeisterFormat(globalData);
-                    globalData = yagermeisterData;
-                } else if (!globalData.profile) {
-                    // If no data loaded yet, load the example
-                    globalData = {
-                        profile: {
-                            steps: [
-                                {
-                                    duration: 10,
-                                    setpoint: 40,
-                                    interpolation: "linear",
-                                },
-                                {
-                                    duration: 30,
-                                    setpoint: 80,
-                                    interpolation: "ease-out",
-                                },
-                                {
-                                    duration: 33,
-                                    setpoint: 150,
-                                    interpolation: "ease-in",
-                                },
-                                {
-                                    duration: 15,
-                                    setpoint: 210,
-                                    interpolation: "linear",
-                                },
-                            ],
+
+                // Load Yägermeister example data
+                const exampleData = {
+                    steps: [
+                        {
+                            duration: 10,
+                            setpoint: 40,
+                            interpolation: "linear",
                         },
-                    };
-                }
-                
+                        {
+                            duration: 30,
+                            setpoint: 80,
+                            interpolation: "ease-out",
+                        },
+                        {
+                            duration: 33,
+                            setpoint: 150,
+                            interpolation: "ease-in",
+                        },
+                        {
+                            duration: 15,
+                            setpoint: 210,
+                            interpolation: "linear",
+                        },
+                    ],
+                };
+
+                // Update global data
+                globalData = exampleData;
+
                 // Update display and plot
                 plotYagermeisterProfile(globalData);
                 updateYagermeisterJsonDisplay(globalData);
-                
+
                 // Update button text
                 this.textContent = 'Standard Mode';
             } else {
                 console.log('Yägermeister Mode Deactivated');
-                
+
                 // Convert current data to standard format if needed
-                if (globalData.profile) {
+                if (globalData.steps) {
                     const standardData = convertToStandardFormat(globalData);
                     globalData = standardData;
                 }
-                
+
                 // Update display and plot
                 plotProfile(globalData);
                 updateJsonDisplay(globalData);
-                
+
                 // Update button text
                 this.textContent = 'Yägermeister Mode';
             }
         });
+
 
         // Load example data on page load
         document.addEventListener('DOMContentLoaded', function() {
